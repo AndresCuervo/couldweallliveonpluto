@@ -2,24 +2,30 @@ if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
 
 var scene, camera, renderer;
 scene = new THREE.Scene();
-scene.background = new THREE.Color( 0x333333 );
+scene.background = new THREE.Color( 0x222222 );
 camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 );
 var gui = new dat.GUI();
 
 var debug = false;
-
 var urlParams = new URLSearchParams(window.location.search);
 var debug = debug || urlParams.get('debug') != null;
 
-const gridPosition = {x : 0.5, y : -0.5, z : 0};
+const gridPosition = {x : 0, y : 0, z : 0};
+// const gridPosition = {x : 4.5, y : -0.5, z : 0};
 
 var objects = {}
 
 var guiParams = {
     'gridSize' : 10,
-    'gridSections' : 10,
     'blocksTransparent' : true,
-    'printParams' : function () {console.log(guiParams)}
+    'cubeSize' : 1,
+    'maxBuildingWidth' : 30,
+    'maxBuildingFloors' : 80,
+    'x' : 0,
+    'makeNewBuilding' : function () {
+        makeBuilding(guiParams.x, 0, 3, 3)
+        guiParams.x++;
+    }
 }
 
 var gridRotation = {x : 60.25};
@@ -28,7 +34,7 @@ var gridColor = 0x2eafac;
 // gridColor = 'white';
 
 function makeGrid() {
-    objects.grid = new THREE.GridHelper(guiParams.gridSize, guiParams.gridSections, gridColor, gridColor);
+    objects.grid = new THREE.GridHelper(guiParams.gridSize, guiParams.gridSize, gridColor, gridColor);
     scene.add(objects.grid);
     objects.grid.position.x = gridPosition.x;
     objects.grid.position.y = gridPosition.y;
@@ -59,16 +65,18 @@ function adjustCamera() {
 }
 
 function makeBuildingCube(x, y, z, optionalArgs) {
-    var geometry = new THREE.BoxGeometry( 1, 1, 1 );
-    var c = 0x2EFAC;
+    var geometry = new THREE.BoxGeometry(1,1,1);
+    var c = 0x2EAFAC;
     if (!!optionalArgs && optionalArgs.color) {
         c = optionalArgs.color;
     }
-    var material = new THREE.MeshBasicMaterial( {color : c, transparent: guiParams.blocksTransparent, opacity: 0.3, side: THREE.DoubleSide} );
+    var material = new THREE.MeshBasicMaterial( {color : c, transparent: guiParams.blocksTransparent, opacity: 0.6, side: THREE.DoubleSide} );
     var cube = new THREE.Mesh( geometry, material );
-    cube.position.x = x;
-    cube.position.y = y;
-    cube.position.z = z;
+
+    // gridPosition.<whatever> - 0.5 is because the grid is fucking misaligned
+    cube.position.x = gridPosition.x - 0.5 +  x;
+    cube.position.y =  0 - (gridPosition.y + y + 0.5);
+    cube.position.z = gridPosition.z - 0.5 +  z;
 
     if (!!optionalArgs && optionalArgs.outOfBuilding) {
         cube.rotation.x = gridRotation.x;
@@ -81,49 +89,73 @@ function makeBuildingCube(x, y, z, optionalArgs) {
 }
 
 function makeBuilding(x, z, width, floors) {
-    var building = new THREE.Object3D();;
+    if (width > guiParams.maxBuildingWidth) {
+        alert("Building not made: tried to make building with more than ",guiParams.maxBuildingWidth, " floors.");
+    } else if (floors > guiParams.maxBuildingFloors) {
+        alert("Building not made: tried to make building with more than ",guiParams.maxBuildingFloors, " width.");
+    } else {
+        var building = new THREE.Object3D();;
 
-    if (!objects.buildings) {
-        objects.buildings = [];
-    }
+        if (!objects.buildings) {
+            objects.buildings = [];
+        }
 
-    objects.buildings.push(building);
+        objects.buildings.push(building);
 
-    var wSquared = (width * width);
-    wSquared = width;
+        var wSquared = (width * width);
+        wSquared = width;
 
-    var count = 0;
+        var count = 0;
 
-    for (var xCoord = 0; xCoord < wSquared; xCoord++) {
-        for (var yCoord = 0; yCoord < floors; yCoord++) {
-            for (var zCoord = 0; zCoord < wSquared; zCoord++) {
-                count++;
-                building.add(makeBuildingCube(
-                    gridPosition.x + xCoord,
-                    gridPosition.y - yCoord,
-                    gridPosition.z + zCoord,
-                    {color : new THREE.Color('green')}
-                ));
+        // Unnecessary???
+        var spacing = guiParams.cubeSize - 1;
+
+        for (var xCoord = 0; xCoord < wSquared; xCoord++) {
+            for (var yCoord = 0; yCoord < floors; yCoord++) {
+                for (var zCoord = 0; zCoord < wSquared; zCoord++) {
+                    count++;
+                    building.add(makeBuildingCube(
+                        x + xCoord + spacing,
+                        yCoord + spacing,
+                        z + zCoord + spacing
+                    ));
+                }
             }
         }
+        if (debug)
+            console.log("Made " + count + " blocks for: ", {width,floors});
+
+        building.rotation.x = gridRotation.x;
+
+        scene.add(building);
+
     }
-    if (debug)
-        console.log("Made " + count + " blocks for: ", {width,floors});
+}
 
-    building.rotation.x = gridRotation.x;
-
-    scene.add(building);
+function scaleCubes(value) {
+    // objects.buildings[0].children[0].scale.x = 3
+    for (x in objects.buildings) {
+        for (y in objects.buildings[x].children) {
+            console.log({x,y});
+            objects.buildings[x].children[y].scale.x = value;
+            objects.buildings[x].children[y].scale.y = value;
+            objects.buildings[x].children[y].scale.z = value;
+        }
+    }
 }
 
 function addGuiControls() {
-    // var sizeController = gui.add(guiParams, 'gridSize', 1, 100).step(1);
-    // sizeController.onFinishChange(changeGrid);
-    //
+    var sizeController = gui.add(guiParams, 'gridSize', 1, 100).step(1);
+    sizeController.onFinishChange(changeGrid);
+
     // gui.add(guiParams, 'printParams');
-    var sectionsController = gui.add(guiParams, 'gridSections', 1, 25).step(1);
-    sectionsController.onFinishChange(changeGrid);
+
+    var cubeSizeController = gui.add(guiParams, 'cubeSize', 1, 10);
+    cubeSizeController.onFinishChange(scaleCubes);
 
     gui.add(guiParams, 'blocksTransparent');
+    gui.add(guiParams, 'makeNewBuilding');
+    gui.add(guiParams, 'x');
 
     // gui.add( camera.position , 'x', -50, 50 ).step(5)
     // gui.add( camera.position , 'y', -500, 500 ).step(5)
@@ -131,14 +163,15 @@ function addGuiControls() {
 }
 
 function init() {
-    renderer = new THREE.WebGLRenderer();
+    renderer = new THREE.WebGLRenderer({antialias : true});
     renderer.setSize( window.innerWidth, window.innerHeight );
     document.body.appendChild( renderer.domElement );
 
     makeGrid();
     // makeBuilding(0,0, 1, 1);
     // makeBuilding(0,0, 4, 2);
-    makeBuilding(1, 0, 2, 2);
+    // makeBuilding(1, 0, 5, 50);
+    // makeBuilding(0, 0, 5, 50);
 
     if (debug)
         controls = new THREE.OrbitControls( camera, renderer.domElement );
