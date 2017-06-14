@@ -3,27 +3,31 @@ if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
 var scene, camera, renderer;
 scene = new THREE.Scene();
 scene.background = new THREE.Color( 0x222222 );
-camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 );
+camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.01, 1000 );
 var gui = new dat.GUI();
 
 var debug = false;
 var urlParams = new URLSearchParams(window.location.search);
 var debug = debug || urlParams.get('debug') != null;
 
-const gridPosition = {x : 0, y : 0, z : 0};
+var numBlocks = 0;
+
+var gridPosition = {x : 0, y : 0, z : 0};
 // const gridPosition = {x : 4.5, y : -0.5, z : 0};
+
+gridPosition.x += 20;
 
 var objects = {}
 
 var guiParams = {
-    'gridSize' : 10,
+    'gridSize' : 60,
     'blocksTransparent' : true,
     'cubeSize' : 1,
     'maxBuildingWidth' : 30,
     'maxBuildingFloors' : 80,
     'x' : 0,
     'makeNewBuilding' : function () {
-        makeBuilding(guiParams.x, 0, 3, 3)
+        makeBuilding(guiParams.x, 0, Math.random(3) * 30 , Math.random(2) * 30)
         guiParams.x++;
     }
 }
@@ -33,14 +37,28 @@ var gridRotation = {x : 60.25};
 var gridColor = 0x2eafac;
 // gridColor = 'white';
 
+
+function setZoom(amount) {
+    camera.zoom = amount;
+    camera.updateProjectionMatrix();
+}
+
+// <amount> should be a demical modifier
+function adjustFov(amount) {
+    camera.fov *= amount;
+    camera.updateProjectionMatrix();
+}
+
 function makeGrid() {
     objects.grid = new THREE.GridHelper(guiParams.gridSize, guiParams.gridSize, gridColor, gridColor);
     scene.add(objects.grid);
+
     objects.grid.position.x = gridPosition.x;
     objects.grid.position.y = gridPosition.y;
     objects.grid.position.z = gridPosition.z;
 
     objects.grid.rotation.x = gridRotation.x;
+
 }
 
 function changeGrid(value) {
@@ -59,14 +77,25 @@ function addResizeListener() {
     }
 }
 
-function adjustCamera() {
+function adjustCameraAndGrid() {
     camera.position.y = -1;
     camera.position.z = 10;
+
+    // camera.fov = 96;
+
+    guiParams.gridSize = 60;
+
+    camera.position.set(0, -6.8, 70); /// good for 60 gridSize
+    // camera.position.set(0, -6, 66); /// good for 80 gridSize
+    // camera.position.set(0, -8, 77); /// good for 100 gridSize
+
+    camera.updateProjectionMatrix();
 }
 
 function makeBuildingCube(x, y, z, optionalArgs) {
     var geometry = new THREE.BoxGeometry(1,1,1);
     var c = 0x2EAFAC;
+    c = 0xDDAADD;
     if (!!optionalArgs && optionalArgs.color) {
         c = optionalArgs.color;
     }
@@ -82,9 +111,7 @@ function makeBuildingCube(x, y, z, optionalArgs) {
         cube.rotation.x = gridRotation.x;
         scene.add(cube);
     }
-    if (debug)
-        console.log("Making:", x,y,z);
-
+    // if (debug) console.log("Making:", x,y,z);
     return cube;
 }
 
@@ -122,14 +149,19 @@ function makeBuilding(x, z, width, floors) {
                 }
             }
         }
-        if (debug)
-            console.log("Made " + count + " blocks for: ", {width,floors});
+        // if (debug) console.log("Made " + count + " blocks for: ", {width,floors});
+
+        numBlocks += count;
+        updateNumBlocks(numBlocks);
 
         building.rotation.x = gridRotation.x;
 
         scene.add(building);
-
     }
+}
+
+function updateNumBlocks(n) {
+    document.getElementById('numBlocks').innerText = "number of blocks: " + n;
 }
 
 function scaleCubes(value) {
@@ -157,26 +189,43 @@ function addGuiControls() {
     gui.add(guiParams, 'makeNewBuilding');
     gui.add(guiParams, 'x');
 
+    var fovController = gui.add(camera, 'fov', 75, 350);
+
+    fovController.onFinishChange(function () {
+        camera.updateProjectionMatrix();
+    });
+
     // gui.add( camera.position , 'x', -50, 50 ).step(5)
     // gui.add( camera.position , 'y', -500, 500 ).step(5)
     // gui.add( camera.position , 'z', -500, 500 ).step(5)
 }
 
+function makeText() {
+    var div = document.createElement('div');
+    div.id = 'numBlocks';
+    div.style = "color: white; position: absolute; top: 10px; left: 0px; z-index: 1";
+    document.body.appendChild(div);
+
+    // Set the actual text
+    updateNumBlocks(numBlocks);
+}
+
 function init() {
+    makeText();
     renderer = new THREE.WebGLRenderer({antialias : true});
     renderer.setSize( window.innerWidth, window.innerHeight );
     document.body.appendChild( renderer.domElement );
 
     makeGrid();
-    // makeBuilding(0,0, 1, 1);
+    makeBuilding(0,0, 1, 1);
     // makeBuilding(0,0, 4, 2);
     // makeBuilding(1, 0, 5, 50);
-    // makeBuilding(0, 0, 5, 50);
+    // makeBuilding(40, 0, 5, 50);
 
     if (debug)
         controls = new THREE.OrbitControls( camera, renderer.domElement );
 
-    adjustCamera();
+    adjustCameraAndGrid();
 
     addGuiControls();
     // TODO :
